@@ -1,4 +1,5 @@
 use clap::{Args, Parser, Subcommand};
+use failure::{format_err, Error};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -33,20 +34,29 @@ struct RemoveArgs {
     key: String,
 }
 
-fn main() {
+fn main() -> kvs::Result<()> {
     let cli = Cli::parse();
-
+    let mut store = kvs::KvStore::open(std::env::current_dir()?)?;
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
-    match &cli.command {
-        Commands::Set(args) => {
-            panic!("unimplemented")
-        }
+    let result = match &cli.command {
+        Commands::Set(args) => store.set(args.key.clone(), args.value.clone()),
         Commands::Get(args) => {
-            panic!("unimplemented")
+            let option = store.get(args.key.clone())?;
+            if let Some(val) = option {
+                println!("{}", val);
+            } else {
+                println!("Key not found");
+            }
+            Ok(())
         }
         Commands::Rm(args) => {
-            panic!("unimplemented")
+            if let Err(e) = store.remove(args.key.clone()) {
+                println!("{}", e);
+                return Err(e);
+            }
+            Ok(())
         }
-    }
+    };
+    result
 }
