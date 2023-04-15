@@ -13,10 +13,24 @@ pub struct KvStore {
     limit: u64,
 }
 
+/// KvsEngine
+pub struct KvsEngine;
+
+/// Log
 #[derive(Serialize, Deserialize)]
-enum Command {
-    Set { key: String, value: String },
-    Remove { key: String },
+pub enum Log {
+    /// Set
+    Set {
+        /// key
+        key: String,
+        /// value
+        value: String,
+    },
+    ///Remove
+    Remove {
+        ///key
+        key: String,
+    },
 }
 
 impl KvStore {
@@ -34,13 +48,13 @@ impl KvStore {
         file.rewind()?;
         loop {
             let offset = file.stream_position()?;
-            let result: bson::de::Result<Command> = bson::from_reader(&file);
+            let result: bson::de::Result<Log> = bson::from_reader(&file);
             if let Ok(cmd) = result {
                 match cmd {
-                    Command::Set { key, .. } => {
+                    Log::Set { key, .. } => {
                         index.insert(key, offset);
                     }
-                    Command::Remove { key } => {
+                    Log::Remove { key } => {
                         index.remove(&key);
                     }
                 }
@@ -58,7 +72,7 @@ impl KvStore {
     }
     /// set k/v
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        let cmd = Command::Set {
+        let cmd = Log::Set {
             key: key.clone(),
             value,
         };
@@ -77,18 +91,17 @@ impl KvStore {
     /// get value by key
     pub fn get(&mut self, key: String) -> Result<Option<String>> {
         if !self.index.contains_key(&key) {
-            //            println!("{:?}",self.index.clone());
             std::fs::copy(self.workdir.join("data.db"), "mydump")?;
             let mut mem: BTreeMap<String, String> = BTreeMap::new();
             self.file.rewind()?;
             loop {
-                let result: bson::de::Result<Command> = bson::from_reader(&self.file);
+                let result: bson::de::Result<Log> = bson::from_reader(&self.file);
                 if let Ok(cmd) = result {
                     match cmd {
-                        Command::Set { key, value } => {
+                        Log::Set { key, value } => {
                             mem.insert(key, value);
                         }
-                        Command::Remove { key } => {
+                        Log::Remove { key } => {
                             mem.remove(&key);
                         }
                     }
@@ -104,7 +117,7 @@ impl KvStore {
         }
         let offset = self.index.get(&key).unwrap().clone();
         self.file.seek(SeekFrom::Start(offset))?;
-        if let Command::Set { value, .. } = bson::from_reader(&self.file)? {
+        if let Log::Set { value, .. } = bson::from_reader(&self.file)? {
             Ok(Some(value))
         } else {
             Ok(None)
@@ -115,7 +128,7 @@ impl KvStore {
         if !self.index.contains_key(&key) {
             return Err(KvsError::KeyNotFound);
         }
-        let cmd = Command::Remove { key: key.clone() };
+        let cmd = Log::Remove { key: key.clone() };
         let bytes = bson::to_vec(&cmd)?;
         let offset = self.file.seek(SeekFrom::End(0))?;
         self.file.write(&bytes)?;
@@ -127,13 +140,13 @@ impl KvStore {
         let mut mem: BTreeMap<String, String> = BTreeMap::new();
         self.file.rewind()?;
         loop {
-            let result: bson::de::Result<Command> = bson::from_reader(&self.file);
+            let result: bson::de::Result<Log> = bson::from_reader(&self.file);
             if let Ok(cmd) = result {
                 match cmd {
-                    Command::Set { key, value } => {
+                    Log::Set { key, value } => {
                         mem.insert(key, value);
                     }
-                    Command::Remove { key } => {
+                    Log::Remove { key } => {
                         mem.remove(&key);
                     }
                 }
@@ -152,7 +165,7 @@ impl KvStore {
         let mut index: BTreeMap<String, u64> = BTreeMap::new();
         for item in mem {
             let (key, value) = item;
-            let bytes = bson::to_vec(&Command::Set {
+            let bytes = bson::to_vec(&Log::Set {
                 key: key.clone(),
                 value,
             })?;
@@ -165,7 +178,7 @@ impl KvStore {
         let mut datafile = self.workdir.clone();
         datafile.push("data.db");
         std::fs::remove_file(&datafile)?;
-        std::fs::rename(compact,datafile)?;
+        std::fs::rename(compact, datafile)?;
         Ok(())
     }
 }
